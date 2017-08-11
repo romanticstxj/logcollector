@@ -1,11 +1,12 @@
 package com.madhouse
 
 import java.time.format.DateTimeFormatter.ofPattern
-import java.time.{Duration, Instant, LocalDateTime}
+import java.time.{Duration, Instant, LocalDateTime, ZoneId}
 
 import com.madhouse.ssp.Configure._
 import com.madhouse.ssp.util.{FsInput, ZkStore}
 import _root_.kafka.common.TopicAndPartition
+import com.madhouse.ssp.zone
 import org.apache.avro.Schema
 import org.apache.avro.file.{DataFileStream, DataFileWriter}
 import org.apache.avro.specific.{SpecificDatumReader, SpecificDatumWriter, SpecificRecordBase => Record}
@@ -19,6 +20,13 @@ import scala.collection.mutable
   * Created by Sunxiang on 2017-07-27 09:10.
   */
 package object ssp {
+
+  val zone = ZoneId.of("Asia/Shanghai")
+
+  val logger: String => Unit = { msg =>
+    val time = LocalDateTime.ofInstant(Instant.now(), zone).format(ofPattern("[yyyy-MM-dd HH:mm:ss]"))
+    println(s"[$time] $msg")
+  }
 
   def writeRecord(records: Array[Record], saveTopicOffsets: () => Unit) = {
 
@@ -46,7 +54,7 @@ package object ssp {
       }
     }
 
-    println(s"write tmp file took: ${(Duration.between(ts, Instant.now).toMillis) / 1000F} s")
+    logger(s"write tmp file took: ${(Duration.between(ts, Instant.now).toMillis) / 1000F} s")
 
     writerCache foreach { case (filePath, write) =>
       write.close()
@@ -68,7 +76,7 @@ package object ssp {
     }
     writerCache.clear()
     saveTopicOffsets()
-    println(s"write records count: ${records.length}, took: ${(Duration.between(ts, Instant.now).toMillis) / 1000F} s")
+    logger(s"write records count: ${records.length}, took: ${(Duration.between(ts, Instant.now).toMillis) / 1000F} s")
   }
 
   def getTopicOffsets(topic: String): Option[Map[TopicAndPartition, Long]] = {
@@ -77,11 +85,11 @@ package object ssp {
       val num = client.countChildren(topicOffsetPath)
       num match {
         case 0 =>
-          println(s"no child found in $topicOffsetPath")
+          logger(s"no child found in $topicOffsetPath")
           None
         case _ =>
           val cs = client.getChildren(offsetPath).asScala
-          println(s"zookeeper children: ${cs.mkString(",")}")
+          logger(s"zookeeper children: ${cs.mkString(",")}")
           val offsets = cs.map(c => TopicAndPartition(topic, c.toInt) -> client.readData[Long](s"$topicOffsetPath/$c")).toMap
           Some(offsets)
       }
@@ -92,7 +100,7 @@ package object ssp {
     ZkStore.withZk { client =>
       offsetRanges foreach { o =>
         val topicOffsetPath = s"$offsetPath/${o.topic}/${o.partition}"
-        println(s"offset topic ${o.topic}, partition ${o.partition}: ${o.fromOffset} -> ${o.untilOffset}")
+        logger(s"offset topic ${o.topic}, partition ${o.partition}: ${o.fromOffset} -> ${o.untilOffset}")
         if (!client.exists(topicOffsetPath)) {
           client.createPersistent(topicOffsetPath, true)
         }

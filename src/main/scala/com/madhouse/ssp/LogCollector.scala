@@ -41,7 +41,7 @@ object LogCollector extends App {
       client.readData(offsetPath)
     } catch {
       case e: Exception =>
-        println(e.toString)
+        logger(e.toString)
         null
     }
   }
@@ -53,11 +53,11 @@ object LogCollector extends App {
 
   val streaming = topicOffset match {
     case Some(offset) =>
-      println(s"offset path: $offsetPath, value: $offset")
+      logger(s"offset path: $offsetPath, value: $offset")
       val messageHandler = (mmd: MessageAndMetadata[String, Array[Byte]]) => (mmd.key, mmd.message)
       KafkaUtils.createDirectStream[String, Array[Byte], StringDecoder, DefaultDecoder, (String, Array[Byte])](ssc, kafkaParams, offset, messageHandler)
     case None =>
-      println(s"offset path: $offsetPath, value: null")
+      logger(s"offset path: $offsetPath, value: null")
       KafkaUtils.createDirectStream[String, Array[Byte], StringDecoder, DefaultDecoder](ssc, kafkaParams, Set(topicName))
   }
 

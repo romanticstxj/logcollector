@@ -21,7 +21,7 @@ object Configure {
   implicit private var config: Config = _
 
   def initConf(hadoopEnv: String, conf: String) = {
-    println(s"hadoop env: $hadoopEnv, config path: $conf")
+    logger(s"hadoop env: $hadoopEnv, config path: $conf")
 
     fs = FileSystem.get {
       val conf = ConfigFactory.load("hadoop").getConfig(hadoopEnv)
@@ -53,8 +53,6 @@ object Configure {
       }
     else default
   }
-
-  lazy val zone = ZoneId.of("Asia/Shanghai")
 
   lazy val slideDuration = getOrElse("spark.streaming.slide_duration", 30)
   lazy val kafkaMaxRatePerPartition = getOrElse("spark.streaming.kafka_max_rate_per_partition", 128)
