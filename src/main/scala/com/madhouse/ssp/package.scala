@@ -3,13 +3,12 @@ package com.madhouse
 import java.time.format.DateTimeFormatter.ofPattern
 import java.time.{Duration, Instant, LocalDateTime, ZoneId}
 
+import kafka.common.TopicAndPartition
 import com.madhouse.ssp.Configure._
 import com.madhouse.ssp.util.{FsInput, ZkStore}
-import _root_.kafka.common.TopicAndPartition
-import com.madhouse.ssp.zone
 import org.apache.avro.Schema
-import org.apache.avro.file.{DataFileStream, DataFileWriter}
-import org.apache.avro.specific.{SpecificDatumReader, SpecificDatumWriter, SpecificRecordBase => Record}
+import org.apache.avro.file.DataFileWriter
+import org.apache.avro.specific.{SpecificDatumWriter, SpecificRecordBase => Record}
 import org.apache.hadoop.fs.Path
 import org.apache.spark.streaming.kafka.OffsetRange
 
@@ -24,7 +23,7 @@ package object ssp {
   val zone = ZoneId.of("Asia/Shanghai")
 
   val logger: String => Unit = { msg =>
-    val time = LocalDateTime.ofInstant(Instant.now(), zone).format(ofPattern("[yyyy-MM-dd HH:mm:ss]"))
+    val time = LocalDateTime.ofInstant(Instant.now(), zone).format(ofPattern("yyyy-MM-dd HH:mm:ss"))
     println(s"[$time] $msg")
   }
 
@@ -38,9 +37,14 @@ package object ssp {
       val fileTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), zone)
       val dayHour = fileTime.format(ofPattern("'day'=yyyyMMdd/'hour'=HH"))
       val filePath = new Path(s"${output.path}/$dayHour/${output.prefix}.$timestamp.${output.suffix}")
+
+      val writer = new DataFileWriter[Record](new SpecificDatumWriter[Record]())
       writerCache.getOrElse(filePath, {
-        val writer = new DataFileWriter[Record](new SpecificDatumWriter[Record]())
-        writer.create(schema, fs.create(new Path(s"$filePath.tmp")))
+        if (fs.exists(filePath)) {
+          val len = fs.getFileStatus(filePath).getLen
+          writer.appendTo(new FsInput(len, fs.open(filePath)), fs.append(filePath))
+        } else writer.create(schema, fs.create(filePath))
+
         writerCache += (filePath -> writer)
         writer
       })
@@ -54,29 +58,14 @@ package object ssp {
       }
     }
 
-    logger(s"write tmp file took: ${(Duration.between(ts, Instant.now).toMillis) / 1000F} s")
+    logger(s"write tmp file took: ${Duration.between(ts, Instant.now).toMillis / 1000F} s")
 
-    writerCache foreach { case (filePath, write) =>
-      write.close()
-      val tmpFilePath = new Path(s"$filePath.tmp")
-
-      if (fs.exists(filePath)) {
-        val len = fs.getFileStatus(filePath).getLen
-        val fis = fs.open(filePath)
-
-        val writer = new DataFileWriter[Record](new SpecificDatumWriter[Record]()).appendTo(new FsInput(len, fis), fs.append(filePath))
-        val reader = new DataFileStream[Record](fs.open(tmpFilePath), new SpecificDatumReader[Record]())
-
-        writer.appendAllFrom(reader, false)
-
-        reader.close
-        writer.close
-        fs.delete(tmpFilePath, false)
-      } else fs.rename(tmpFilePath, filePath)
-    }
+    writerCache foreach { _._2.close }
     writerCache.clear()
+
     saveTopicOffsets()
-    logger(s"write records count: ${records.length}, took: ${(Duration.between(ts, Instant.now).toMillis) / 1000F} s")
+
+    logger(s"write records count: ${records.length}, took: ${Duration.between(ts, Instant.now).toMillis / 1000F} s")
   }
 
   def getTopicOffsets(topic: String): Option[Map[TopicAndPartition, Long]] = {

@@ -1,8 +1,8 @@
 package com.madhouse.ssp.util
 
-import org.apache.avro.file.SeekableInput
 import java.io.Closeable
 
+import org.apache.avro.file.SeekableInput
 import org.apache.hadoop.fs.FSDataInputStream
 
 /**
