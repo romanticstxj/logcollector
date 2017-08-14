@@ -3,6 +3,21 @@
 #### Compile: 
 > #####  sbt clean assembly
 
+#### Run: 
+> <pre> 
+> path/to/spark/bin/spark-submit \
+>   --executor-memory Xg \
+>   --driver-memory Xg
+>   --total-executor-cores X \
+>   --executor-cores X \
+>   --deploy-mode cluster
+>   --conf spark.driver.maxResultSize=Xg \
+>   --conf spark.kryoserializer.buffer.max=128m
+>   --class path/to/&lt;application-jar&gt; \
+>   &lt;hadoop-env&gt; e.g. develop beta production \
+>   &lt;application-config-path&gt;
+> </pre>
+
 #### Config:
 > <pre>
 > app {
