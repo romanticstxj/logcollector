@@ -10,12 +10,12 @@ import org.I0Itec.zkclient.ZkClient
 object ZkStore {
   private var client: ZkClient = _
 
-  private def init() = {
-    client = new ZkClient(Configure.zkServers, 60000, 6000, new ZKStringSerializer())
+  private def init(zkServers: String) = {
+    client = new ZkClient(zkServers, 60000, 6000, new ZKStringSerializer())
   }
 
-  def withZk[T](fn: ZkClient => T): T = {
-    if (client == null || client.getShutdownTrigger) init()
+  def withZk[T](fn: ZkClient => T)(implicit configure: Configure): T = {
+    if (client == null || client.getShutdownTrigger) init(configure.zkServers)
     fn(client)
   }
 }

@@ -4,7 +4,6 @@ import java.time.format.DateTimeFormatter.ofPattern
 import java.time.{Duration, Instant, LocalDateTime, ZoneId}
 
 import kafka.common.TopicAndPartition
-import com.madhouse.ssp.Configure._
 import com.madhouse.ssp.util.{FsInput, ZkStore}
 import org.apache.avro.Schema
 import org.apache.avro.file.DataFileWriter
@@ -27,8 +26,8 @@ package object ssp {
     println(s"[$time] $msg")
   }
 
-  def writeRecord(records: Array[Record], saveTopicOffsets: () => Unit) = {
-
+  def writeRecord(records: Array[Record], schema: Schema, saveTopicOffsets: () => Unit)(implicit configure: Configure) = {
+    import configure._
     val ts = Instant.now
     val writerCache = mutable.Map[Path, DataFileWriter[Record]]()
 
@@ -37,7 +36,7 @@ package object ssp {
       val fileTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), zone)
       val dayHour = fileTime.format(ofPattern("'day'=yyyyMMdd/'hour'=HH"))
       val filePath = new Path(s"${output.path}/$dayHour/${output.prefix}.$timestamp.${output.suffix}")
-
+      logger(s"ts: $ts, file path: $filePath")
       val writer = new DataFileWriter[Record](new SpecificDatumWriter[Record]())
       writerCache.getOrElse(filePath, {
         if (fs.exists(filePath)) {
@@ -50,15 +49,14 @@ package object ssp {
       })
     }
 
-    if (records.length > 0) {
-      val schema = records.head.getSchema
-      records foreach { r =>
-        val time = try { r.get("timestamp").asInstanceOf[Long] } catch { case _: Exception => ts.toEpochMilli }
-        getFileWriter(time, schema).append(r)
-      }
+    getFileWriter(ts.toEpochMilli, schema)
+
+    records foreach { r =>
+      val time = try { r.get("time").asInstanceOf[Long] } catch { case _: Exception => ts.toEpochMilli }
+      getFileWriter(time, schema).append(r)
     }
 
-    logger(s"write tmp file took: ${Duration.between(ts, Instant.now).toMillis / 1000F} s")
+    logger(s"write file took: ${Duration.between(ts, Instant.now).toMillis / 1000F} s")
 
     writerCache foreach { _._2.close }
     writerCache.clear()
@@ -68,32 +66,33 @@ package object ssp {
     logger(s"write records count: ${records.length}, took: ${Duration.between(ts, Instant.now).toMillis / 1000F} s")
   }
 
-  def getTopicOffsets(topic: String): Option[Map[TopicAndPartition, Long]] = {
+  def getTopicOffsets(topic: String)(implicit configure: Configure): Option[Map[TopicAndPartition, Long]] = {
     ZkStore.withZk { client =>
-      val topicOffsetPath = s"$offsetPath/$topic"
+      val topicOffsetPath = s"${configure.offsetPath}/$topic"
       val num = client.countChildren(topicOffsetPath)
       num match {
         case 0 =>
           logger(s"no child found in $topicOffsetPath")
           None
         case _ =>
-          val cs = client.getChildren(offsetPath).asScala
+          val cs = client.getChildren(topicOffsetPath).asScala
           logger(s"zookeeper children: ${cs.mkString(",")}")
-          val offsets = cs.map(c => TopicAndPartition(topic, c.toInt) -> client.readData[Long](s"$topicOffsetPath/$c")).toMap
+          val offsets = cs.map(c => TopicAndPartition(topic, c.toInt) -> client.readData[String](s"$topicOffsetPath/$c").toLong).toMap
           Some(offsets)
       }
     }
   }
 
-  def saveTopicOffsets(offsetRanges: Array[OffsetRange]) = {
+  def saveTopicOffsets(offsetRanges: Array[OffsetRange])(implicit configure: Configure) = {
     ZkStore.withZk { client =>
       offsetRanges foreach { o =>
-        val topicOffsetPath = s"$offsetPath/${o.topic}/${o.partition}"
-        logger(s"offset topic ${o.topic}, partition ${o.partition}: ${o.fromOffset} -> ${o.untilOffset}")
+        val topicOffsetPath = s"${configure.offsetPath}/${o.topic}/${o.partition}"
         if (!client.exists(topicOffsetPath)) {
           client.createPersistent(topicOffsetPath, true)
         }
-        client.writeData(topicOffsetPath, o.untilOffset.toString)
+        client.writeData(topicOffsetPath, o.untilOffset)
+
+        logger(s"save offset topic ${o.topic}, partition ${o.partition}: ${o.fromOffset} -> ${o.untilOffset}")
       }
     }
   }

@@ -12,7 +12,6 @@
 >   --executor-cores X \
 >   --deploy-mode cluster
 >   --conf spark.driver.maxResultSize=Xg \
->   --conf spark.kryoserializer.buffer.max=128m
 >   --class path/to/&lt;application-jar&gt; \
 >   &lt;hadoop-env&gt; e.g. develop beta production \
 >   &lt;application-config-path&gt;

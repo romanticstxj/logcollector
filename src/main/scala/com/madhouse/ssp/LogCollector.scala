@@ -4,31 +4,34 @@ package com.madhouse.ssp
  * Created by Sunxiang on 2017-07-27 17:12.
  */
 import com.madhouse.ssp.avro._
+import com.madhouse.ssp.entity.LogType._
+import com.madhouse.ssp.util.AvroUtil.recordDecode
 import com.madhouse.ssp.util._
-import _root_.kafka.message.MessageAndMetadata
-import _root_.kafka.serializer.{DefaultDecoder, StringDecoder}
-import org.apache.avro.specific.SpecificRecordBase
+import kafka.message.MessageAndMetadata
+import kafka.serializer.{DefaultDecoder, StringDecoder}
+import org.apache.avro.specific.{SpecificRecordBase => Record}
 import org.apache.spark.SparkConf
 import org.apache.spark.streaming.kafka._
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 
 object LogCollector extends App {
-  import Configure._
 
-  private val (hadoopEnv, configFile) = args.length match {
-    case 1 => ("production", args(0))
-    case 2 => (args(0), args(1))
-    case _ => throw new IllegalArgumentException("the parameter length must equal 1 or 2")
+  require(args.length == 1, s"config file is not set")
+
+  implicit val configure = new Configure(args(0))
+  import configure._
+
+  val schema = logType match {
+    case MEDIABID => MediaBid.SCHEMA$
+    case DSPBID => DSPBid.SCHEMA$
+    case IMPRESSION => ImpressionTrack.SCHEMA$
+    case CLICK => ClickTrack.SCHEMA$
+    case WINNOTICE => WinNotice.SCHEMA$
   }
-
-  require(Seq("develop", "beta", "production").contains(hadoopEnv), s"invalid hadoop environment $hadoopEnv")
-
-  initConf(hadoopEnv, configFile)
 
   val sparkConf = new SparkConf()
     .setAppName(s"LogCollector-$logType")
     .set("spark.streaming.kafka.maxRatePerPartition", s"$kafkaMaxRatePerPartition")
-    .registerKryoClasses(Array(classOf[MediaBid], classOf[DSPBid], classOf[ImpressionTrack], classOf[ClickTrack], classOf[WinNotice]))
 
   val kafkaParams = Map(
     "metadata.broker.list" -> kafkaBrokers,
@@ -49,7 +52,6 @@ object LogCollector extends App {
   val topicOffset = getTopicOffsets(topicName)
 
   val ssc = new StreamingContext(sparkConf, Seconds(slideDuration))
-  ssc.sparkContext.hadoopConfiguration.addResource(fs.getConf)
 
   val streaming = topicOffset match {
     case Some(offset) =>
@@ -65,13 +67,14 @@ object LogCollector extends App {
 
   val recordsDStream = streaming transform { (rdd, _) =>
     offsetRanges = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
-
-    rdd map { case (_, bytes) => AvroUtil.recordDecode[SpecificRecordBase](bytes) } filter { _ != null }
+    rdd map { _._2 }
   }
 
   recordsDStream foreachRDD { rdd =>
-    writeRecord(rdd.collect(), () => saveTopicOffsets(offsetRanges))
+    val records = rdd.collect() map { bs => AvroUtil.recordDecode[Record](bs, schema) } filter { _ != null }
+    writeRecord(records, schema, () => saveTopicOffsets(offsetRanges))
   }
+
 
   ssc.start()
   ssc.awaitTermination()
