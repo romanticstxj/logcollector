@@ -5,7 +5,6 @@ package com.madhouse.ssp
  */
 import com.madhouse.ssp.avro._
 import com.madhouse.ssp.entity.LogType._
-import com.madhouse.ssp.util.AvroUtil.recordDecode
 import com.madhouse.ssp.util._
 import kafka.message.MessageAndMetadata
 import kafka.serializer.{DefaultDecoder, StringDecoder}
@@ -74,7 +73,6 @@ object LogCollector extends App {
     val records = rdd.collect() map { bs => AvroUtil.recordDecode[Record](bs, schema) } filter { _ != null }
     writeRecord(records, schema, () => saveTopicOffsets(offsetRanges))
   }
-
 
   ssc.start()
   ssc.awaitTermination()
