@@ -9,6 +9,7 @@ import org.apache.avro.Schema
 import org.apache.avro.file.DataFileWriter
 import org.apache.avro.specific.{SpecificDatumWriter, SpecificRecordBase => Record}
 import org.apache.hadoop.fs.Path
+import org.apache.spark.streaming.Time
 import org.apache.spark.streaming.kafka.OffsetRange
 
 import scala.collection.JavaConverters._
@@ -26,7 +27,7 @@ package object ssp {
     println(s"[$time] $msg")
   }
 
-  def writeRecord(records: Array[Record], schema: Schema, saveTopicOffsets: () => Unit)(implicit configure: Configure) = {
+  def writeRecord(data: (Array[Record], Time), schema: Schema, saveTopicOffsets: () => Unit)(implicit configure: Configure) = {
     import configure._
     val ts = Instant.now
     val writerCache = mutable.Map[Path, DataFileWriter[Record]]()
@@ -36,7 +37,7 @@ package object ssp {
       val fileTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), zone)
       val dayHour = fileTime.format(ofPattern("'day'=yyyyMMdd/'hour'=HH"))
       val filePath = new Path(s"${output.path}/$dayHour/${output.prefix}.$timestamp.${output.suffix}")
-      logger(s"ts: $ts, file path: $filePath")
+      //logger(s"ts: $ts, file path: $filePath")
       val writer = new DataFileWriter[Record](new SpecificDatumWriter[Record]())
       writerCache.getOrElse(filePath, {
         if (fs.exists(filePath)) {
@@ -49,9 +50,9 @@ package object ssp {
       })
     }
 
-    getFileWriter(ts.toEpochMilli, schema)
+    getFileWriter(data._2.milliseconds, schema)
 
-    records foreach { r =>
+    data._1 foreach { r =>
       val time = try { r.get("time").asInstanceOf[Long] } catch { case _: Exception => ts.toEpochMilli }
       getFileWriter(time, schema).append(r)
     }
@@ -63,7 +64,7 @@ package object ssp {
 
     saveTopicOffsets()
 
-    logger(s"write records count: ${records.length}, took: ${Duration.between(ts, Instant.now).toMillis / 1000F} s")
+    logger(s"write records count: ${data._1.length}, took: ${Duration.between(ts, Instant.now).toMillis / 1000F} s")
   }
 
   def getTopicOffsets(topic: String)(implicit configure: Configure): Option[Map[TopicAndPartition, Long]] = {

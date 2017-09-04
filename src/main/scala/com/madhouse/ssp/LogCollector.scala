@@ -69,9 +69,9 @@ object LogCollector extends App {
     rdd map { _._2 }
   }
 
-  recordsDStream foreachRDD { rdd =>
+  recordsDStream foreachRDD { (rdd, time) =>
     val records = rdd.collect() map { bs => AvroUtil.recordDecode[Record](bs, schema) } filter { _ != null }
-    writeRecord(records, schema, () => saveTopicOffsets(offsetRanges))
+    writeRecord((records, time), schema, () => saveTopicOffsets(offsetRanges))
   }
 
   ssc.start()
