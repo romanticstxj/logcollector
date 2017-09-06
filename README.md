@@ -12,7 +12,7 @@
 >   --executor-cores X \
 >   --deploy-mode cluster \
 >   --master &lt;master&gt; \
->   --class com.madhouse.ssp.LogCollector; \
+>   --class com.madhouse.ssp.LogCollector \
 >   hdfs://XX/path/to/&lt;application&gt;.jar \
 >   hdfs://XX/path/to/&lt;application&gt.conf
 > </pre>
