@@ -10,11 +10,11 @@
 >   --driver-memory Xg
 >   --total-executor-cores X \
 >   --executor-cores X \
->   --deploy-mode cluster
->   --conf spark.driver.maxResultSize=Xg \
->   --class path/to/&lt;application-jar&gt; \
->   &lt;hadoop-env&gt; e.g. develop beta production \
->   &lt;application-config-path&gt;
+>   --deploy-mode cluster \
+>   --master &lt;master&gt; \
+>   --class com.madhouse.ssp.LogCollector; \
+>   hdfs://XX/path/to/&lt;application&gt;.jar \
+>   hdfs://XX/path/to/&lt;application&gt.conf
 > </pre>
 
 #### Config:
