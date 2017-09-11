@@ -22,28 +22,28 @@
 > app {
 >   spark {
 >     streaming {
->       kafka_max_rate_per_partition = 128
->       slide_duration = 60
+>       kafka_max_rate_per_partition = @kafka_max_rate_per_partition@
+>       slide_duration = @slide_duration@
 >     }
 >   }
 >
 >   kafka {
->     brokers = "10.10.16.25.27:9092,10.10.16.25.28:9092,10.10.16.25.29:9092"
->     topic = "topic_mediabid"
->   }
->
->   zookeeper {
->     servers = "172.16.25.27:2181,172.16.25.28:2181,172.16.25.29:2181"
->     offset_base_path = "/offsets/log_collector/topics"
->   }
->   
->   output {
->     path = "/madssp/bidlogs/media_bid"
->     prefix = "madssp.media_bid"
->     suffix = "log.avro"
->     rotate_interval_ms = 120000
+>     brokers = "@kafka.brokers@"
+>     topic = "@kafka.topic@"
 >   }
 > 
->   log_type = "MEDIABID"  // eg. MEDIABID, DSPBID, IMPRESSION, CLICK, WINNOTICE
+>   zookeeper {
+>     servers = "@zookeeper.servers@"
+>     offset_base_path = "@zookeeper.offset_base_path@"
+>   }
+>
+>   output {
+>     path = "@output.path@"
+>     prefix = "@outpath.prefix@"
+>     suffix = "@output.suffix@"
+>     rotate_interval_ms = @output.rotate_interval_ms@
+>   }
+>
+>   log_type = "@log_type@"  // eg. MEDIABID, DSPBID, IMPRESSION, CLICK, WINNOTICE
 > }
 > </pre>
