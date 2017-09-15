@@ -50,14 +50,12 @@ package object ssp {
       })
     }
 
-    getFileWriter(data._2.milliseconds, schema)
-
     data._1 foreach { r =>
       val time = try { r.get("time").asInstanceOf[Long] } catch { case _: Exception => ts.toEpochMilli }
       getFileWriter(time, schema).append(r)
     }
 
-    logger(s"write file took: ${Duration.between(ts, Instant.now).toMillis / 1000F} s")
+    if (writerCache.isEmpty) getFileWriter(data._2.milliseconds, schema)
 
     writerCache foreach { _._2.close }
     writerCache.clear()
