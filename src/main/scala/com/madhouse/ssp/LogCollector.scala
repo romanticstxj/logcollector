@@ -48,15 +48,17 @@ object LogCollector extends App {
     }
   }
 
-  val topicOffset = getTopicOffsets(topicName)
+  val topicOffsets = getTopicOffsets(topicName)
 
   val ssc = new StreamingContext(sparkConf, Seconds(slideDuration))
 
-  val streaming = topicOffset match {
-    case Some(offset) =>
-      logger(s"offset path: $offsetPath, value: $offset")
+  val streaming = topicOffsets match {
+    case Some(offsets) =>
+      offsets.toList map { case (k, v) => (k.topic -> s"${k.partition}: $v") } groupBy { _._1 } foreach { e =>
+        logger(s"offset path: $offsetPath, value: {topic: ${e._1}, partitions: [${e._2.map(_._2).mkString(", ")}]}")
+      }
       val messageHandler = (mmd: MessageAndMetadata[String, Array[Byte]]) => (mmd.key, mmd.message)
-      KafkaUtils.createDirectStream[String, Array[Byte], StringDecoder, DefaultDecoder, (String, Array[Byte])](ssc, kafkaParams, offset, messageHandler)
+      KafkaUtils.createDirectStream[String, Array[Byte], StringDecoder, DefaultDecoder, (String, Array[Byte])](ssc, kafkaParams, offsets, messageHandler)
     case None =>
       logger(s"offset path: $offsetPath, value: null")
       KafkaUtils.createDirectStream[String, Array[Byte], StringDecoder, DefaultDecoder](ssc, kafkaParams, Set(topicName))

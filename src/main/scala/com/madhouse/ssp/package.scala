@@ -84,14 +84,17 @@ package object ssp {
 
   def saveTopicOffsets(offsetRanges: Array[OffsetRange])(implicit configure: Configure) = {
     ZkStore.withZk { client =>
-      offsetRanges foreach { o =>
+      val offsets = offsetRanges map { o =>
         val topicOffsetPath = s"${configure.offsetPath}/${o.topic}/${o.partition}"
         if (!client.exists(topicOffsetPath)) {
           client.createPersistent(topicOffsetPath, true)
         }
         client.writeData(topicOffsetPath, o.untilOffset)
+        (o.topic -> s"${o.partition}: ${o.fromOffset} -> ${o.untilOffset}")
+      }
 
-        logger(s"save offset topic ${o.topic}, partition ${o.partition}: ${o.fromOffset} -> ${o.untilOffset}")
+      offsets.groupBy(_._1) map { case (k, v) => k -> v.map(_._2) } foreach { e =>
+        logger(s"save offsets {topic: ${e._1}, partitions: [${e._2.mkString(", ")}]}")
       }
     }
   }
